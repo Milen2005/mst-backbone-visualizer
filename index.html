@@ -43,8 +43,9 @@
   :focus-visible{ outline:2px solid var(--teal); outline-offset:3px; }
 
   .wrap{ max-width:1180px; margin:0 auto; padding:0 28px; }
+  .wrap-wide{ max-width:1400px; margin:0 auto; padding:0 28px; }
   section{ padding:100px 0; }
-  @media(max-width:720px){ section{ padding:64px 0; } .wrap{ padding:0 18px; } }
+  @media(max-width:720px){ section{ padding:64px 0; } .wrap{ padding:0 18px; } .wrap-wide{ padding:0 18px; } }
 
   .eyebrow{
     font-family:var(--mono);
@@ -155,16 +156,16 @@
   .viz-section{ background:var(--bg-2); border-top:1px solid var(--border-soft); border-bottom:1px solid var(--border-soft); }
   .viz-shell{
     display:grid;
-    grid-template-columns:1.5fr 1fr;
+    grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);
     gap:0;
     border:1px solid var(--border);
     border-radius:16px;
     overflow:hidden;
     background:var(--panel);
   }
-  @media(max-width:960px){ .viz-shell{ grid-template-columns:1fr; } }
+  @media(max-width:960px){ .viz-shell{ grid-template-columns:minmax(0,1fr); } }
 
-  .viz-canvas-pane{ position:relative; border-right:1px solid var(--border); padding:20px; }
+  .viz-canvas-pane{ position:relative; border-right:1px solid var(--border); padding:20px; min-width:0; }
   @media(max-width:960px){ .viz-canvas-pane{ border-right:none; border-bottom:1px solid var(--border); } }
   #graphCanvas{ width:100%; height:auto; display:block; border-radius:10px; background:radial-gradient(ellipse at 50% 30%, #0F1A2D, #0A1220); }
 
@@ -201,7 +202,7 @@
   .legend span{ display:inline-flex; align-items:center; gap:6px; }
   .dot{ width:9px; height:9px; border-radius:50%; display:inline-block; }
 
-  .viz-side{ padding:20px; display:flex; flex-direction:column; gap:18px; }
+  .viz-side{ padding:20px; display:flex; flex-direction:column; gap:18px; min-width:0; }
   .stat-row{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
   .stat{
     background:var(--panel-2); border:1px solid var(--border-soft); border-radius:10px;
@@ -260,7 +261,7 @@
   }
   .tab-btn:hover{ color:var(--text-muted); }
   .tab-btn.active{ color:var(--teal); border-bottom-color:var(--teal); }
-  .tab-panel{ display:none; flex:1; min-height:0; flex-direction:column; gap:10px; }
+  .tab-panel{ display:none; flex:1; min-height:0; min-width:0; flex-direction:column; gap:10px; }
   .tab-panel.active{ display:flex; }
 
   .param-table{ width:100%; border-collapse:collapse; font-family:var(--mono); font-size:12px; }
@@ -300,7 +301,7 @@
   }
   .code-line.active .code-complexity{ color:var(--amber); opacity:1; }
 
-  .queue-row{ display:flex; gap:6px; overflow-x:auto; padding-bottom:8px; }
+  .queue-row{ display:flex; gap:6px; overflow-x:auto; padding-bottom:8px; min-width:0; }
   .queue-chip{
     flex:0 0 auto; font-family:var(--mono); font-size:10.5px; padding:6px 9px; border-radius:6px;
     border:1px solid var(--border-soft); color:var(--text-dim); white-space:nowrap; transition:all .2s;
@@ -426,7 +427,7 @@
 
 <!-- ============ SECTION 3: INTERACTIVE VISUALIZER ============ -->
 <section class="viz-section" id="visualizer">
-  <div class="wrap" style="padding-top:64px; padding-bottom:64px;">
+  <div class="wrap-wide" style="padding-top:64px; padding-bottom:64px;">
     <div class="eyebrow">03 — Run it yourself</div>
     <h2>Build the backbone, one cable at a time</h2>
     <p class="lede" style="margin-bottom:36px;">This is a real (small) graph of Indian data centers with realistic relative routing costs. Step through Kruskal's algorithm and watch Union-Find decide, edge by edge, whether each candidate cable gets built.</p>
@@ -605,14 +606,14 @@
 
   /* ============ DATA: graph of Indian data-center cities ============ */
   const nodes = [
-    { name:"Delhi",      x:0.50, y:0.10 },
-    { name:"Ahmedabad",  x:0.33, y:0.35 },
-    { name:"Kolkata",    x:0.82, y:0.38 },
-    { name:"Mumbai",     x:0.36, y:0.53 },
-    { name:"Pune",       x:0.40, y:0.62 },
-    { name:"Hyderabad",  x:0.53, y:0.66 },
-    { name:"Bangalore",  x:0.49, y:0.86 },
-    { name:"Chennai",    x:0.60, y:0.88 }
+    { name:"Delhi",      x:0.50, y:0.08 },
+    { name:"Ahmedabad",  x:0.16, y:0.32 },
+    { name:"Kolkata",    x:0.88, y:0.30 },
+    { name:"Mumbai",     x:0.15, y:0.60 },
+    { name:"Pune",       x:0.38, y:0.68 },
+    { name:"Hyderabad",  x:0.62, y:0.58 },
+    { name:"Bangalore",  x:0.36, y:0.94 },
+    { name:"Chennai",    x:0.66, y:0.94 }
   ];
   const edgeDefs = [
     [0,1,14],[0,2,18],[0,3,20],
@@ -761,7 +762,7 @@
   const canvas = document.getElementById('graphCanvas');
   const ctx = canvas.getContext('2d');
   let logicalW = 760, logicalH = 480;
-  const NODE_PAD_X = 42, NODE_PAD_TOP = 36, NODE_PAD_BOTTOM = 52;
+  const NODE_PAD_X = 56, NODE_PAD_TOP = 46, NODE_PAD_BOTTOM = 60;
   const narration = document.getElementById('narration');
   const statCost = document.getElementById('statCost');
   const statEdges = document.getElementById('statEdges');
@@ -930,10 +931,10 @@
       ctx.strokeStyle = stroke;
       ctx.stroke();
 
-      ctx.font = "600 11.5px 'Inter', sans-serif";
+      ctx.font = "600 12.5px 'Inter', sans-serif";
       ctx.fillStyle = '#E7ECF6';
       ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText(n.name, p.x, p.y + 38);
+      ctx.fillText(n.name, p.x, p.y + 40);
     });
   }
 
@@ -1250,7 +1251,7 @@
     const displayWidth = canvas.clientWidth;
     if(!displayWidth) return;
     logicalW = displayWidth;
-    logicalH = displayWidth * 0.66;
+    logicalH = displayWidth * 0.74;
     canvas.width = logicalW * ratio;
     canvas.height = logicalH * ratio;
     canvas.style.height = logicalH + 'px';
