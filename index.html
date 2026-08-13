@@ -1,0 +1,1319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wiring the Cloud — MST & Union-Find, Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#080D18;
+    --bg-2:#0C1424;
+    --panel:#101A2C;
+    --panel-2:#0D1727;
+    --border:#1D2C44;
+    --border-soft:#162238;
+    --text:#E7ECF6;
+    --text-muted:#8C99B4;
+    --text-dim:#5C6B87;
+    --teal:#2FDFA8;
+    --teal-dim:#1B7D5E;
+    --amber:#F5A85C;
+    --amber-dim:#8C5E2E;
+    --red:#F1637A;
+    --red-dim:#7A3242;
+    --blue:#6C93F0;
+    --mono:'IBM Plex Mono', monospace;
+    --display:'Space Grotesk', sans-serif;
+    --body:'Inter', sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--body);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:var(--teal-dim); color:#fff; }
+  a{ color:var(--teal); }
+  :focus-visible{ outline:2px solid var(--teal); outline-offset:3px; }
+
+  .wrap{ max-width:1180px; margin:0 auto; padding:0 28px; }
+  section{ padding:100px 0; }
+  @media(max-width:720px){ section{ padding:64px 0; } .wrap{ padding:0 18px; } }
+
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:12.5px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--teal);
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:18px;
+  }
+  .eyebrow::before{
+    content:'';
+    width:7px; height:7px;
+    background:var(--teal);
+    border-radius:50%;
+    box-shadow:0 0 0 4px rgba(47,223,168,0.15);
+  }
+
+  h1,h2,h3{ font-family:var(--display); font-weight:600; letter-spacing:-0.01em; }
+  h2{ font-size:clamp(28px,3.4vw,40px); margin-bottom:16px; }
+  h3{ font-size:19px; margin-bottom:10px; color:var(--text); }
+  p{ color:var(--text-muted); font-size:16px; max-width:66ch; }
+  .lede{ font-size:18px; color:var(--text-muted); max-width:62ch; }
+
+  /* ---------- HERO ---------- */
+  .hero{
+    min-height:92vh;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    position:relative;
+    overflow:hidden;
+    border-bottom:1px solid var(--border-soft);
+  }
+  .hero-bg{
+    position:absolute; inset:0;
+    background:
+      radial-gradient(ellipse 900px 500px at 78% 12%, rgba(47,223,168,0.09), transparent 60%),
+      radial-gradient(ellipse 700px 500px at 10% 90%, rgba(108,147,240,0.08), transparent 60%);
+    pointer-events:none;
+  }
+  #heroCanvas{ position:absolute; inset:0; width:100%; height:100%; opacity:0.55; }
+  .hero-inner{ position:relative; z-index:2; }
+  .hero h1{
+    font-size:clamp(34px,5.6vw,64px);
+    line-height:1.06;
+    max-width:15ch;
+    margin-bottom:22px;
+  }
+  .hero h1 .accent{ color:var(--teal); }
+  .hero-sub{
+    font-size:18px;
+    color:var(--text-muted);
+    max-width:56ch;
+    margin-bottom:36px;
+  }
+  .hero-tags{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:44px; }
+  .tag{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--text-dim);
+    border:1px solid var(--border);
+    padding:6px 12px;
+    border-radius:100px;
+  }
+  .scroll-cue{
+    font-family:var(--mono); font-size:12px; color:var(--text-dim);
+    display:flex; align-items:center; gap:8px;
+  }
+  .scroll-cue svg{ animation:bob 1.8s ease-in-out infinite; }
+  @keyframes bob{ 0%,100%{transform:translateY(0);} 50%{transform:translateY(5px);} }
+
+  /* ---------- GENERIC PANEL / GRID ---------- */
+  .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:56px; align-items:start; }
+  @media(max-width:860px){ .grid-2{ grid-template-columns:1fr; gap:36px; } }
+
+  .diagram-box{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:26px;
+  }
+
+  .analogy{
+    background:var(--panel-2);
+    border-left:3px solid var(--amber);
+    border-radius:0 10px 10px 0;
+    padding:16px 20px;
+    margin-top:20px;
+    font-size:14.5px;
+    color:var(--text-muted);
+  }
+  .analogy b{ color:var(--amber); font-weight:600; }
+
+  /* ---------- MINI GLOSSARY CHIPS ---------- */
+  .term-list{ display:flex; flex-direction:column; gap:14px; margin-top:22px; }
+  .term{
+    display:grid; grid-template-columns:110px 1fr; gap:16px;
+    padding-bottom:14px; border-bottom:1px solid var(--border-soft);
+  }
+  .term:last-child{ border-bottom:none; }
+  .term .k{ font-family:var(--mono); font-size:13px; color:var(--teal); }
+  .term .v{ font-size:14.5px; color:var(--text-muted); }
+
+  /* ---------- VISUALIZER ---------- */
+  .viz-section{ background:var(--bg-2); border-top:1px solid var(--border-soft); border-bottom:1px solid var(--border-soft); }
+  .viz-shell{
+    display:grid;
+    grid-template-columns:1.5fr 1fr;
+    gap:0;
+    border:1px solid var(--border);
+    border-radius:16px;
+    overflow:hidden;
+    background:var(--panel);
+  }
+  @media(max-width:960px){ .viz-shell{ grid-template-columns:1fr; } }
+
+  .viz-canvas-pane{ position:relative; border-right:1px solid var(--border); padding:20px; }
+  @media(max-width:960px){ .viz-canvas-pane{ border-right:none; border-bottom:1px solid var(--border); } }
+  #graphCanvas{ width:100%; height:auto; display:block; border-radius:10px; background:radial-gradient(ellipse at 50% 30%, #0F1A2D, #0A1220); }
+
+  .controls{
+    display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; align-items:center;
+  }
+  .btn{
+    font-family:var(--mono);
+    font-size:12.5px;
+    letter-spacing:0.03em;
+    color:var(--text);
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    padding:9px 14px;
+    border-radius:8px;
+    cursor:pointer;
+    transition:border-color .15s, transform .1s, background .15s;
+  }
+  .btn:hover{ border-color:var(--teal); background:#0F2A22; }
+  .btn:active{ transform:scale(0.97); }
+  .btn.primary{ background:var(--teal); color:#04140F; border-color:var(--teal); font-weight:600; }
+  .btn.primary:hover{ background:#3EEAB6; }
+  .btn:disabled{ opacity:0.35; cursor:not-allowed; }
+  .btn.ghost{ background:transparent; }
+  .seg{ display:flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  .seg button{
+    font-family:var(--mono); font-size:12px; padding:9px 14px; background:var(--panel-2);
+    color:var(--text-muted); border:none; cursor:pointer; border-right:1px solid var(--border);
+  }
+  .seg button:last-child{ border-right:none; }
+  .seg button.active{ background:var(--teal); color:#04140F; font-weight:600; }
+
+  .legend{ display:flex; flex-wrap:wrap; gap:16px; margin-top:14px; font-family:var(--mono); font-size:11.5px; color:var(--text-dim); }
+  .legend span{ display:inline-flex; align-items:center; gap:6px; }
+  .dot{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+
+  .viz-side{ padding:20px; display:flex; flex-direction:column; gap:18px; }
+  .stat-row{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  .stat{
+    background:var(--panel-2); border:1px solid var(--border-soft); border-radius:10px;
+    padding:12px 10px; text-align:center;
+  }
+  .stat .num{ font-family:var(--mono); font-size:20px; color:var(--teal); font-weight:600; display:inline-block; }
+  .stat .num.pulse{ animation:statPop .45s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes statPop{ 0%{ transform:scale(1); } 45%{ transform:scale(1.22); color:#3EEAB6; } 100%{ transform:scale(1); } }
+  .stat .lbl{ font-size:10.5px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin-top:2px; }
+
+  .panel-title{ font-family:var(--mono); font-size:11.5px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-dim); margin-bottom:10px; }
+
+  .dsu-groups{ display:flex; flex-wrap:wrap; gap:8px; }
+  .dsu-node{
+    font-family:var(--mono); font-size:12.5px; padding:7px 10px; border-radius:7px;
+    border:1px solid transparent; color:#04140F; font-weight:600; transition:background .3s ease;
+  }
+  .dsu-node.merged{ animation:chipPulse .55s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes chipPulse{ 0%{ transform:scale(1); box-shadow:0 0 0 0 rgba(47,223,168,0.5); } 45%{ transform:scale(1.14); box-shadow:0 0 0 6px rgba(47,223,168,0); } 100%{ transform:scale(1); box-shadow:0 0 0 0 rgba(47,223,168,0); } }
+
+  .log-box{
+    background:var(--panel-2); border:1px solid var(--border-soft); border-radius:10px;
+    padding:12px 14px; height:210px; overflow-y:auto; font-family:var(--mono); font-size:12.5px;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .log-box::-webkit-scrollbar{ width:6px; }
+  .log-box::-webkit-scrollbar-thumb{ background:var(--border); border-radius:3px; }
+  .log-entry{ padding-bottom:8px; border-bottom:1px dashed var(--border-soft); color:var(--text-muted); }
+  .log-entry:last-child{ border-bottom:none; }
+  .log-entry.accept{ color:var(--teal); }
+  .log-entry.reject{ color:var(--red); }
+  .log-entry.info{ color:var(--blue); }
+  .log-entry .w{ color:var(--text-dim); }
+  .log-entry.new{ animation:logIn .4s ease; }
+  @keyframes logIn{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:translateY(0); } }
+
+  .narration{
+    background:linear-gradient(135deg, rgba(47,223,168,0.07), rgba(108,147,240,0.05));
+    border:1px solid var(--border-soft); border-radius:10px; padding:14px 16px;
+    font-size:14px; line-height:1.55; color:var(--text); min-height:52px;
+    display:flex; align-items:center;
+  }
+  .narration p{ margin:0; }
+  .narration.anim p{ animation:narrateFade .35s ease; }
+  @keyframes narrateFade{ from{ opacity:0; transform:translateY(4px); } to{ opacity:1; transform:translateY(0); } }
+
+  .scrubber-row{ display:flex; align-items:center; gap:12px; }
+  .scrubber-row input[type=range]{ flex:1; accent-color:var(--teal); height:4px; }
+  .step-count{ font-family:var(--mono); font-size:11px; color:var(--text-dim); white-space:nowrap; min-width:78px; }
+
+  .tabs{ display:flex; gap:4px; border-bottom:1px solid var(--border-soft); }
+  .tab-btn{
+    font-family:var(--mono); font-size:11px; letter-spacing:0.05em; text-transform:uppercase;
+    padding:9px 12px; background:transparent; border:none; color:var(--text-dim);
+    cursor:pointer; border-bottom:2px solid transparent; transition:color .15s;
+  }
+  .tab-btn:hover{ color:var(--text-muted); }
+  .tab-btn.active{ color:var(--teal); border-bottom-color:var(--teal); }
+  .tab-panel{ display:none; flex:1; min-height:0; flex-direction:column; gap:10px; }
+  .tab-panel.active{ display:flex; }
+
+  .param-table{ width:100%; border-collapse:collapse; font-family:var(--mono); font-size:12px; }
+  .param-table.fade{ animation:panelFade .3s ease; }
+  @keyframes panelFade{ from{ opacity:0.35; } to{ opacity:1; } }
+  .param-table td{ padding:6.5px 0; border-bottom:1px dashed var(--border-soft); color:var(--text-dim); vertical-align:top; }
+  .param-table td:first-child{ width:46%; padding-right:8px; }
+  .param-table td.val{ color:var(--text); font-weight:600; }
+  .param-table td.val.yes{ color:var(--red); }
+  .param-table td.val.no{ color:var(--teal); }
+
+  .parent-grid{ display:flex; flex-wrap:wrap; gap:6px; }
+  .parent-grid.fade{ animation:panelFade .3s ease; }
+  .parent-chip{
+    font-family:var(--mono); font-size:10px; background:var(--panel-2);
+    border:1px solid var(--border-soft); border-radius:6px; padding:4px 7px; color:var(--text-dim);
+    transition:border-color .3s ease, color .3s ease;
+  }
+  .parent-chip b{ color:var(--text); font-weight:600; }
+  .parent-chip.root{ border-color:var(--teal-dim); color:var(--teal); }
+
+  .code-block{
+    background:#070C16; border:1px solid var(--border-soft); border-radius:10px;
+    padding:14px 16px; font-family:var(--mono); font-size:11.5px; line-height:1.85;
+    overflow-x:auto; flex:1;
+  }
+  .code-line{
+    display:flex; align-items:baseline; justify-content:space-between; gap:14px;
+    padding:1.5px 8px; margin:0 -8px; border-radius:4px; color:var(--text-dim); white-space:pre;
+    transition:background-color .3s ease, color .3s ease;
+  }
+  .code-line.active{ background:rgba(47,223,168,0.13); color:var(--teal); }
+  .code-text{ white-space:pre; }
+  .code-complexity{
+    font-size:10.5px; color:var(--amber); white-space:nowrap; opacity:0.85; flex-shrink:0;
+    transition:opacity .3s ease;
+  }
+  .code-line.active .code-complexity{ color:var(--amber); opacity:1; }
+
+  .queue-row{ display:flex; gap:6px; overflow-x:auto; padding-bottom:8px; }
+  .queue-chip{
+    flex:0 0 auto; font-family:var(--mono); font-size:10.5px; padding:6px 9px; border-radius:6px;
+    border:1px solid var(--border-soft); color:var(--text-dim); white-space:nowrap; transition:all .2s;
+  }
+  .queue-chip.done-accept{ border-color:var(--teal-dim); color:var(--teal); }
+  .queue-chip.done-reject{ border-color:var(--red-dim); color:var(--red); text-decoration:line-through; opacity:0.6; }
+  .queue-chip.current{ background:var(--amber); color:#3A2200; border-color:var(--amber); font-weight:700; animation:chipPop .35s ease; }
+  @keyframes chipPop{ from{ transform:scale(0.85); opacity:0.4; } to{ transform:scale(1); opacity:1; } }
+  .queue-note{ font-size:12.5px; color:var(--text-dim); font-style:italic; }
+
+  .ds-banner{
+    background:var(--panel-2); border:1px solid var(--border-soft); border-left:3px solid var(--blue);
+    border-radius:0 8px 8px 0; padding:11px 13px; font-size:12.5px; color:var(--text-muted); line-height:1.55;
+  }
+  .ds-banner b{ color:var(--blue); font-family:var(--mono); font-size:11.5px; }
+
+  /* ---------- STEPS / EXPLAINER ---------- */
+  .mini-diagram{ display:flex; align-items:center; justify-content:center; gap:18px; padding:22px 10px; }
+  .mini-node{
+    width:38px; height:38px; border-radius:50%; background:var(--panel-2); border:2px solid var(--border);
+    display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:12px; color:var(--text-muted);
+  }
+  .mini-arrow{ color:var(--text-dim); font-family:var(--mono); }
+
+  .compare-table{ width:100%; border-collapse:collapse; margin-top:24px; }
+  .compare-table th, .compare-table td{
+    text-align:left; padding:14px 16px; border-bottom:1px solid var(--border-soft); font-size:14.5px;
+  }
+  .compare-table th{ font-family:var(--mono); font-size:11.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-dim); }
+  .compare-table td{ color:var(--text-muted); }
+  .compare-table td.hl{ color:var(--teal); font-family:var(--mono); }
+
+  .callout{
+    background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:28px 30px;
+    margin-top:28px; position:relative; overflow:hidden;
+  }
+  .callout::before{
+    content:''; position:absolute; top:0; left:0; width:4px; height:100%; background:var(--amber);
+  }
+  .callout h3{ color:var(--amber); }
+
+  footer{ padding:56px 0; border-top:1px solid var(--border-soft); }
+  footer p{ font-size:13px; color:var(--text-dim); font-family:var(--mono); }
+
+  .num-badge{
+    font-family:var(--mono); font-size:12px; color:var(--teal); border:1px solid var(--teal-dim);
+    width:26px; height:26px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center;
+    margin-right:10px;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important; }
+    html{ scroll-behavior:auto; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ HERO ============ -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <canvas id="heroCanvas"></canvas>
+  <div class="wrap hero-inner">
+    <div class="eyebrow">Design &amp; Analysis of Algorithms — MST · Union-Find</div>
+    <h1>How do you wire a country's cloud <span class="accent">with the least fiber?</span></h1>
+    <p class="hero-sub">Every time a cloud provider opens a new data center, someone has to decide which cities to connect with physical fiber — and which routes to skip — so every site stays reachable at the lowest possible cost. That's not a metaphor. It's a Minimum Spanning Tree problem, solved with Kruskal's algorithm and a structure called Union-Find. Scroll down and run it yourself.</p>
+    <div class="hero-tags">
+      <span class="tag">Kruskal's Algorithm</span>
+      <span class="tag">Union-Find / DSU</span>
+      <span class="tag">Path Compression</span>
+      <span class="tag">Union by Rank</span>
+      <span class="tag">Minimum Spanning Tree</span>
+    </div>
+    <div class="scroll-cue">
+      SCROLL TO EXPLORE
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="#5C6B87" stroke-width="2" stroke-linecap="round"/></svg>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SECTION 1: THE SETUP ============ -->
+<section>
+  <div class="wrap grid-2">
+    <div>
+      <div class="eyebrow">01 — The setup</div>
+      <h2>Turn the map into a graph</h2>
+      <p class="lede">Say a cloud provider needs to connect eight Indian data centers with dedicated fiber. Any two cities <em>could</em> be linked — but every kilometer of fiber costs money to lay and lease. The provider wants everyone connected, for the least total cost.</p>
+      <p style="margin-top:16px;">In algorithm terms, each <b style="color:var(--text)">data center is a node</b>, each <b style="color:var(--text)">possible fiber route is an edge</b>, and the <b style="color:var(--text)">cost of that route is the edge's weight</b>. That's the whole translation — a real infrastructure decision, described as a weighted graph.</p>
+      <div class="analogy"><b>Think of it like</b> planning roads between towns, not fiber. You don't need a road between every pair of towns — you just need enough roads that you can drive from any town to any other, and you'd rather not pay for roads you don't need.</div>
+    </div>
+    <div class="diagram-box">
+      <div class="panel-title">Vocabulary, plainly</div>
+      <div class="term-list">
+        <div class="term"><div class="k">Node</div><div class="v">A data center / city. A point that needs to be connected.</div></div>
+        <div class="term"><div class="k">Edge</div><div class="v">A possible fiber route between two data centers.</div></div>
+        <div class="term"><div class="k">Weight</div><div class="v">The cost of that specific route — distance, right-of-way fees, whatever the provider is minimizing.</div></div>
+        <div class="term"><div class="k">Spanning Tree</div><div class="v">A set of edges that connects every node, with no redundant loops — remove any edge and something becomes unreachable.</div></div>
+        <div class="term"><div class="k">MST</div><div class="v">The spanning tree whose edges add up to the lowest possible total cost.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SECTION 2: THE GOAL ============ -->
+<section style="padding-top:0;">
+  <div class="wrap">
+    <div class="eyebrow">02 — The goal</div>
+    <h2 style="max-width:20ch;">Connect everyone. Spend the least. Never build a loop.</h2>
+    <p class="lede">A Minimum Spanning Tree is the cheapest possible way to keep a network fully connected. Two rules make it a <em>tree</em> rather than just "a bunch of cheap cables":</p>
+    <div class="grid-2" style="margin-top:32px;">
+      <div class="diagram-box">
+        <h3 style="color:var(--teal);">Rule 1 — Stay connected</h3>
+        <p style="font-size:14.5px;">Every data center must be reachable from every other one, directly or through other data centers. No site gets left off the network.</p>
+      </div>
+      <div class="diagram-box">
+        <h3 style="color:var(--red);">Rule 2 — No cycles</h3>
+        <p style="font-size:14.5px;">If a new cable would connect two data centers that <em>already</em> have a path between them, it's a redundant loop — extra spend with no new reachability. Skip it.</p>
+      </div>
+    </div>
+    <p style="margin-top:24px; font-size:14.5px;">That second rule — "would this edge create a loop?" — is the exact question Kruskal's algorithm has to answer for every candidate cable, hundreds or thousands of times on a real network. Answering it fast is what Union-Find is for. Let's see it happen.</p>
+  </div>
+</section>
+
+<!-- ============ SECTION 3: INTERACTIVE VISUALIZER ============ -->
+<section class="viz-section" id="visualizer">
+  <div class="wrap" style="padding-top:64px; padding-bottom:64px;">
+    <div class="eyebrow">03 — Run it yourself</div>
+    <h2>Build the backbone, one cable at a time</h2>
+    <p class="lede" style="margin-bottom:36px;">This is a real (small) graph of Indian data centers with realistic relative routing costs. Step through Kruskal's algorithm and watch Union-Find decide, edge by edge, whether each candidate cable gets built.</p>
+
+    <div class="viz-shell">
+      <div class="viz-canvas-pane">
+        <canvas id="graphCanvas" width="760" height="480"></canvas>
+        <div class="legend">
+          <span><i class="dot" style="background:var(--text-dim);"></i> Not yet considered</span>
+          <span><i class="dot" style="background:var(--amber);"></i> Currently checking</span>
+          <span><i class="dot" style="background:var(--teal);"></i> Accepted into backbone</span>
+          <span><i class="dot" style="background:var(--red);"></i> Rejected — would loop</span>
+        </div>
+        <div class="controls">
+          <div class="seg" role="group" aria-label="Choose algorithm">
+            <button id="algoKruskal" class="active">Kruskal's + Union-Find</button>
+            <button id="algoPrim">Prim's</button>
+          </div>
+          <button class="btn ghost" id="btnPrev">← Back</button>
+          <button class="btn primary" id="btnStep">Next step →</button>
+          <button class="btn" id="btnPlay">▶ Auto-play</button>
+          <button class="btn ghost" id="btnReset">↺ Reset</button>
+          <button class="btn ghost" id="btnRandom">🎲 New route costs</button>
+        </div>
+      </div>
+
+      <div class="viz-side">
+        <div class="narration" id="narration">Press <b style="margin:0 4px;">Next step</b> to check the first candidate cable — the cheapest one available.</div>
+
+        <div class="scrubber-row">
+          <span class="step-count" id="stepCount">Step 0 of 0</span>
+          <input type="range" id="stepSlider" min="0" max="0" value="0" aria-label="Jump to step">
+        </div>
+
+        <div class="stat-row">
+          <div class="stat"><div class="num" id="statCost">0</div><div class="lbl">Total cost</div></div>
+          <div class="stat"><div class="num" id="statEdges">0 / 7</div><div class="lbl">Cables built</div></div>
+          <div class="stat"><div class="num" id="statOps">0</div><div class="lbl" id="statOpsLbl">Find() calls</div></div>
+        </div>
+
+        <div>
+          <div class="panel-title">Union-Find state — one color per fiber group</div>
+          <div class="dsu-groups" id="dsuGroups"></div>
+        </div>
+
+        <div class="tabs" role="tablist">
+          <button class="tab-btn active" data-tab="story">Story</button>
+          <button class="tab-btn" data-tab="params">Live parameters</button>
+          <button class="tab-btn" data-tab="code">Pseudocode</button>
+        </div>
+
+        <div class="tab-panel active" id="tab-story">
+          <div class="panel-title">Decision log</div>
+          <div class="log-box" id="logBox"></div>
+        </div>
+
+        <div class="tab-panel" id="tab-params">
+          <div class="ds-banner" id="dsBanner"></div>
+          <div id="queueWrap">
+            <div class="panel-title">Candidate queue, sorted by cost</div>
+            <div class="queue-row" id="queueRow"></div>
+          </div>
+          <div class="panel-title" style="margin-top:2px;">Algorithm state — this exact step</div>
+          <table class="param-table" id="paramTable"></table>
+          <div id="parentWrap">
+            <div class="panel-title" style="margin-top:2px;">Parent pointers, after path compression</div>
+            <div class="parent-grid" id="parentGrid"></div>
+          </div>
+        </div>
+
+        <div class="tab-panel" id="tab-code">
+          <div class="panel-title">What the algorithm is actually running</div>
+          <pre class="code-block" id="codeBlock"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SECTION 4: UNION-FIND UNDER THE HOOD ============ -->
+<section>
+  <div class="wrap">
+    <div class="eyebrow">04 — Under the hood</div>
+    <h2>Why Union-Find, specifically?</h2>
+    <p class="lede">Every time Kruskal's algorithm looks at a candidate cable, it needs one yes/no answer: <em>"are these two data centers already connected, even indirectly?"</em> Checking that with a plain graph search would be slow if you did it for every single edge. Union-Find answers it in nearly constant time instead — using two small tricks.</p>
+
+    <div class="grid-2" style="margin-top:40px;">
+      <div class="diagram-box">
+        <h3><span class="num-badge">1</span>Union by rank</h3>
+        <p style="font-size:14.5px;">When merging two groups, always attach the <em>smaller</em> group under the <em>larger</em> one's root — never the other way around. This keeps the group's internal "depth" from growing unnecessarily, so tracing back to the root stays fast.</p>
+      </div>
+      <div class="diagram-box">
+        <h3><span class="num-badge">2</span>Path compression</h3>
+        <p style="font-size:14.5px;">Every time you trace a node back to its group's root, reattach that node — and everyone you passed through — directly to the root. The next lookup for any of them is then instant.</p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <h3>What that buys you</h3>
+      <p style="font-size:14.5px; max-width:none;">With both tricks together, each <span style="color:var(--text); font-family:var(--mono);">find()</span> or <span style="color:var(--text); font-family:var(--mono);">union()</span> call runs in amortized <span style="color:var(--text); font-family:var(--mono);">O(α(n))</span> time — where α is the inverse Ackermann function, a number so small it's effectively 4 or 5 for any graph you could physically build. In practice: constant time. That's what makes Kruskal's algorithm run in <span style="color:var(--text); font-family:var(--mono);">O(E log E)</span> overall — dominated entirely by sorting the candidate cables, not by checking for loops.</p>
+    </div>
+
+    <h3 style="margin-top:48px; font-size:22px;">Data structures and complexity, stage by stage</h3>
+    <p style="margin-bottom:24px;">A clean way to audit any algorithm: list every stage, name the data structure actually doing the work, and price it in time and space. Here's that audit for both algorithms in this demo.</p>
+
+    <div class="grid-2">
+      <div>
+        <p style="font-family:var(--mono); font-size:12px; color:var(--teal); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:10px;">Kruskal's + Union-Find</p>
+        <table class="compare-table" style="margin-top:0;">
+          <thead><tr><th>Stage</th><th>Data structure</th><th>Time</th><th>Space</th></tr></thead>
+          <tbody>
+            <tr><td>Store candidate routes</td><td>Edge list — array of (u, v, w)</td><td>—</td><td class="hl">O(E)</td></tr>
+            <tr><td>Order by cost</td><td>Array + comparison sort</td><td class="hl">O(E log E)</td><td class="hl">O(E)</td></tr>
+            <tr><td>Track fiber groups</td><td>Disjoint Set Union — parent[], rank[]</td><td class="hl">O(α(n)) / op</td><td class="hl">O(V)</td></tr>
+            <tr><td>Scan every edge once</td><td>Loop over sorted array</td><td class="hl">O(E)</td><td>—</td></tr>
+            <tr><td>Collect the result</td><td>Dynamic array (MST edges)</td><td class="hl">O(1) / insert</td><td class="hl">O(V)</td></tr>
+            <tr><td><b style="color:var(--text);">Overall</b></td><td>—</td><td class="hl"><b>O(E log E)</b></td><td class="hl"><b>O(V + E)</b></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <p style="font-family:var(--mono); font-size:12px; color:var(--blue); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:10px;">Prim's (production version, with a heap)</p>
+        <table class="compare-table" style="margin-top:0;">
+          <thead><tr><th>Stage</th><th>Data structure</th><th>Time</th><th>Space</th></tr></thead>
+          <tbody>
+            <tr><td>Store the graph</td><td>Adjacency list</td><td>—</td><td class="hl">O(V + E)</td></tr>
+            <tr><td>Track the tree so far</td><td>Boolean array — visited[]</td><td class="hl">O(1) lookup</td><td class="hl">O(V)</td></tr>
+            <tr><td>Find next cheapest edge</td><td>Min-heap / priority queue</td><td class="hl">O(log V) / extraction</td><td class="hl">O(V)</td></tr>
+            <tr><td>Relax neighboring edges</td><td>Heap decrease-key or lazy insert</td><td class="hl">O(log V) / update</td><td>—</td></tr>
+            <tr><td><b style="color:var(--text);">Overall</b></td><td>—</td><td class="hl"><b>O(E log V)</b></td><td class="hl"><b>O(V + E)</b></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="queue-note" style="margin-top:16px; max-width:none;">Note: the live demo above implements Prim's with a plain linear scan of frontier edges each round, purely so every candidate edge stays visible on screen — that costs O(V·E) instead of O(E log V). The table above reflects the real, heap-based version used in production systems.</p>
+  </div>
+</section>
+
+<!-- ============ SECTION 5: COMPLEXITY COMPARISON ============ -->
+<section style="padding-top:0;">
+  <div class="wrap">
+    <div class="eyebrow">05 — Kruskal's vs. Prim's</div>
+    <h2>Two routes to the same backbone</h2>
+    <p class="lede">Both algorithms are greedy — they never reconsider a decision — and both guarantee the true minimum-cost network. They just build it up differently.</p>
+    <table class="compare-table">
+      <thead><tr><th>&nbsp;</th><th>Kruskal's</th><th>Prim's</th></tr></thead>
+      <tbody>
+        <tr><td>Approach</td><td>Sort every candidate cable by cost, add the cheapest one that doesn't create a loop</td><td>Grow one connected region outward, always adding the cheapest cable leaving it</td></tr>
+        <tr><td>Needs</td><td>Union-Find, to detect loops instantly</td><td>A priority queue, to find the next cheapest edge</td></tr>
+        <tr><td>Time complexity</td><td class="hl">O(E log E)</td><td class="hl">O(E log V)</td></tr>
+        <tr><td>Best suited for</td><td>Sparse networks — relatively few possible routes</td><td>Dense networks — many possible routes between sites</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ SECTION 6: REAL WORLD NUANCE ============ -->
+<section style="background:var(--bg-2); border-top:1px solid var(--border-soft); border-bottom:1px solid var(--border-soft);">
+  <div class="wrap" style="max-width:820px;">
+    <div class="eyebrow">06 — Where the textbook model ends</div>
+    <h2>One honest caveat</h2>
+    <p class="lede">A real backbone provider — AWS, a telecom, anyone — almost never deploys a literal MST. An MST is, by definition, one cable cut away from splitting the network in half. Real infrastructure needs <b style="color:var(--text)">redundancy</b>: if a single fiber line is dug up by construction equipment, the network shouldn't partition.</p>
+    <p style="margin-top:16px;">So in practice, MST is the <em>starting point</em> — the cost-optimal skeleton — which engineers then deliberately add extra edges to, often reaching for a <b style="color:var(--text)">k-connected</b> topology (a network that survives k−1 simultaneous cable cuts). The algorithm doesn't disappear; it just becomes the cheap baseline you build resilience on top of, rather than the final architecture.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>BUILT FOR A DESIGN &amp; ANALYSIS OF ALGORITHMS ASSIGNMENT — MST (KRUSKAL'S / PRIM'S) + UNION-FIND, APPLIED TO CLOUD BACKBONE DESIGN.</p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============ DATA: graph of Indian data-center cities ============ */
+  const nodes = [
+    { name:"Delhi",      x:0.50, y:0.10 },
+    { name:"Ahmedabad",  x:0.33, y:0.35 },
+    { name:"Kolkata",    x:0.82, y:0.38 },
+    { name:"Mumbai",     x:0.36, y:0.53 },
+    { name:"Pune",       x:0.40, y:0.62 },
+    { name:"Hyderabad",  x:0.53, y:0.66 },
+    { name:"Bangalore",  x:0.49, y:0.86 },
+    { name:"Chennai",    x:0.60, y:0.88 }
+  ];
+  const edgeDefs = [
+    [0,1,14],[0,2,18],[0,3,20],
+    [1,3,8],[1,4,10],
+    [3,4,3],[4,5,9],[3,5,12],
+    [5,2,16],[5,6,10],[5,7,11],
+    [6,7,6],[6,4,15],
+    [7,2,20]
+  ];
+
+  let edges = edgeDefs.map(([a,b,w],i)=>({id:i,a,b,w}));
+
+  function randomizeWeights(){
+    edges = edgeDefs.map(([a,b],i)=>({id:i,a,b,w: 3 + Math.floor(Math.random()*22)}));
+  }
+
+  /* ============ UNION-FIND ============ */
+  class DSU{
+    constructor(n){
+      this.parent = Array.from({length:n}, (_,i)=>i);
+      this.rank = new Array(n).fill(0);
+      this.finds = 0; this.unions = 0;
+    }
+    find(x){
+      this.finds++;
+      if(this.parent[x] !== x){ this.parent[x] = this.find(this.parent[x]); }
+      return this.parent[x];
+    }
+    union(x,y){
+      this.unions++;
+      let rx = this.find(x), ry = this.find(y);
+      if(rx === ry) return false;
+      if(this.rank[rx] < this.rank[ry]) { const t=rx; rx=ry; ry=t; }
+      this.parent[ry] = rx;
+      if(this.rank[rx] === this.rank[ry]) this.rank[rx]++;
+      return true;
+    }
+  }
+
+  /* ============ STEP COMPUTATION ============ */
+  function computeKruskalSteps(){
+    const dsu = new DSU(nodes.length);
+    const sorted = [...edges].sort((a,b)=>a.w-b.w);
+    const steps = []; let cost = 0; const mst = [];
+    for(const e of sorted){
+      const rootA = dsu.find(e.a), rootB = dsu.find(e.b);
+      let type;
+      if(rootA !== rootB){
+        dsu.union(e.a, e.b);
+        cost += e.w; mst.push(e.id);
+        type = 'accept';
+      } else {
+        type = 'reject';
+      }
+      steps.push({
+        type, edge:e, cost, mst:[...mst],
+        roots: nodes.map((_,i)=>dsu.find(i)),
+        rootA, rootB,
+        finds:dsu.finds, unions:dsu.unions,
+        parentSnap: dsu.parent.slice(), rankSnap: dsu.rank.slice()
+      });
+    }
+    steps.push({
+      type:'done', cost, mst:[...mst],
+      roots: nodes.map((_,i)=>dsu.find(i)),
+      finds:dsu.finds, unions:dsu.unions,
+      parentSnap: dsu.parent.slice(), rankSnap: dsu.rank.slice()
+    });
+    return steps;
+  }
+
+  function computePrimSteps(){
+    const n = nodes.length;
+    const visited = new Array(n).fill(false);
+    visited[0] = true;
+    const steps = []; let cost = 0; const mst = [];
+    for(let k=0;k<n-1;k++){
+      let best = null; let scanned = 0;
+      for(const e of edges){
+        const av = visited[e.a], bv = visited[e.b];
+        if(av !== bv){
+          scanned++;
+          if(!best || e.w < best.w) best = e;
+        }
+      }
+      if(!best) break;
+      visited[best.a] = true; visited[best.b] = true;
+      cost += best.w; mst.push(best.id);
+      steps.push({ type:'accept', edge:best, cost, mst:[...mst], visited:[...visited], scanned, round: k+1 });
+    }
+    steps.push({ type:'done', cost, mst:[...mst], visited:[...visited] });
+    return steps;
+  }
+
+  /* ============ PSEUDOCODE, WITH COMPLEXITY PER LINE ============ */
+  const CODE = {
+    kruskal: [
+      { t:"function kruskal(edges):", c:null },
+      { t:"  sort edges by weight ascending", c:"O(E log E)" },
+      { t:"  for each edge (u, v, w) in sorted edges:", c:"O(E) iterations" },
+      { t:"    rootU = find(u)", c:"O(α(n)) amortized" },
+      { t:"    rootV = find(v)", c:"O(α(n)) amortized" },
+      { t:"    if rootU != rootV:", c:"O(1)" },
+      { t:"      union(u, v)", c:"O(α(n)) amortized" },
+      { t:"      MST.add(edge); cost += w", c:"O(1)" },
+      { t:"    else:", c:null },
+      { t:"      skip edge  // would form a cycle", c:"O(1)" },
+      { t:"  return MST, cost", c:"total: O(E log E)" }
+    ],
+    prim: [
+      { t:"function prim(graph, start):", c:null },
+      { t:"  visited = { start }", c:"O(1)" },
+      { t:"  MST = []", c:"O(1)" },
+      { t:"  while visited.size < n:", c:"O(V) iterations" },
+      { t:"    edge = min weight edge", c:"O(log V) with a min-heap" },
+      { t:"           crossing the visited boundary", c:"(O(E) scan in this demo)" },
+      { t:"    MST.add(edge); cost += edge.weight", c:"O(1)" },
+      { t:"    visited.add(edge.newNode)", c:"O(1)" },
+      { t:"  return MST, cost", c:"total: O(E log V) with a heap" }
+    ]
+  };
+
+  function activeLines(step){
+    if(algo === 'kruskal'){
+      if(!step) return [1];
+      if(step.type === 'accept') return [2,3,4,5,6,7];
+      if(step.type === 'reject') return [2,3,4,5,8,9];
+      if(step.type === 'done') return [10];
+    } else {
+      if(!step) return [1,2];
+      if(step.type === 'accept') return [3,4,5,6,7];
+      if(step.type === 'done') return [8];
+    }
+    return [];
+  }
+
+  /* ============ STATE ============ */
+  let algo = 'kruskal';
+  let steps = computeKruskalSteps();
+  let stepIndex = -1;
+  let playing = false; let playTimer = null;
+
+  const groupPalette = ['#2FDFA8','#6C93F0','#F5A85C','#C77DFF','#F1637A','#4FD1E8','#E8D25C','#8AE88A'];
+
+  /* ============ DOM ============ */
+  const canvas = document.getElementById('graphCanvas');
+  const ctx = canvas.getContext('2d');
+  let logicalW = 760, logicalH = 480;
+  const NODE_PAD_X = 42, NODE_PAD_TOP = 36, NODE_PAD_BOTTOM = 52;
+  const narration = document.getElementById('narration');
+  const statCost = document.getElementById('statCost');
+  const statEdges = document.getElementById('statEdges');
+  const statOps = document.getElementById('statOps');
+  const statOpsLbl = document.getElementById('statOpsLbl');
+  const dsuGroups = document.getElementById('dsuGroups');
+  const logBox = document.getElementById('logBox');
+  const btnStep = document.getElementById('btnStep');
+  const btnPrev = document.getElementById('btnPrev');
+  const btnPlay = document.getElementById('btnPlay');
+  const btnReset = document.getElementById('btnReset');
+  const btnRandom = document.getElementById('btnRandom');
+  const algoKruskal = document.getElementById('algoKruskal');
+  const algoPrim = document.getElementById('algoPrim');
+  const stepSlider = document.getElementById('stepSlider');
+  const stepCount = document.getElementById('stepCount');
+  const queueWrap = document.getElementById('queueWrap');
+  const queueRow = document.getElementById('queueRow');
+  const dsBanner = document.getElementById('dsBanner');
+  const paramTable = document.getElementById('paramTable');
+  const parentWrap = document.getElementById('parentWrap');
+  const parentGrid = document.getElementById('parentGrid');
+  const codeBlock = document.getElementById('codeBlock');
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  const tabPanels = document.querySelectorAll('.tab-panel');
+
+  function px(n){
+    return {
+      x: NODE_PAD_X + n.x * (logicalW - NODE_PAD_X*2),
+      y: NODE_PAD_TOP + n.y * (logicalH - NODE_PAD_TOP - NODE_PAD_BOTTOM)
+    };
+  }
+
+  function edgeColor(step, e){
+    if(!step) return '#33415C';
+    if(algo === 'kruskal'){
+      if(step.mst.includes(e.id)) return '#2FDFA8';
+      if(step.type !== 'done' && step.edge && step.edge.id === e.id){
+        return step.type === 'accept' ? '#2FDFA8' : '#F1637A';
+      }
+      return '#33415C';
+    } else {
+      if(step.mst.includes(e.id)) return '#2FDFA8';
+      if(step.type !== 'done' && step.edge && step.edge.id === e.id) return '#2FDFA8';
+      return '#33415C';
+    }
+  }
+
+  /* ---- animation state: a short "burst" plays whenever the step changes ---- */
+  let burstType = null;      // 'accept' | 'reject' | 'done' | null
+  let burstEdge = null;
+  let burstNodes = [];
+  let burstStart = 0;
+  const BURST_MS = { accept: 620, reject: 480, done: 900 };
+
+  function triggerBurst(step){
+    if(!step){ burstType = null; return; }
+    burstStart = performance.now();
+    if(step.type === 'accept'){ burstType='accept'; burstEdge=step.edge; burstNodes=[step.edge.a, step.edge.b]; }
+    else if(step.type === 'reject'){ burstType='reject'; burstEdge=step.edge; burstNodes=[]; }
+    else if(step.type === 'done'){ burstType='done'; burstEdge=null; burstNodes=[]; }
+  }
+
+  function lerp(a,b,t){ return a + (b-a)*t; }
+  function hexToRgb(h){ h=h.replace('#',''); return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)]; }
+  function lerpColor(c1,c2,t){
+    const a=hexToRgb(c1), b=hexToRgb(c2);
+    return `rgb(${Math.round(lerp(a[0],b[0],t))},${Math.round(lerp(a[1],b[1],t))},${Math.round(lerp(a[2],b[2],t))})`;
+  }
+  function easeOutCubic(t){ return 1 - Math.pow(1-t, 3); }
+
+  function drawGraph(now){
+    now = now || performance.now();
+    const step = stepIndex >= 0 ? steps[stepIndex] : null;
+    ctx.clearRect(0,0,logicalW,logicalH);
+
+    const isBurst = burstType && (now - burstStart) < BURST_MS[burstType];
+    const bp = isBurst ? (now - burstStart) / BURST_MS[burstType] : 1;
+
+    // edges
+    edges.forEach(e=>{
+      const A = px(nodes[e.a]), B = px(nodes[e.b]);
+      let col = edgeColor(step, e);
+      let lw = (col === '#2FDFA8') ? 3.4 : ( (step && step.edge && step.edge.id===e.id) ? 2.6 : 1.4 );
+      let endX = B.x, endY = B.y;
+      let labelColor = (col === '#F1637A') ? '#F1637A' : (col === '#2FDFA8' ? '#2FDFA8' : '#8C99B4');
+
+      if(isBurst && burstType === 'accept' && burstEdge && burstEdge.id === e.id){
+        const t = easeOutCubic(bp);
+        col = lerpColor('#F5A85C', '#2FDFA8', bp);
+        lw = lerp(1.8, 4, bp);
+        endX = A.x + (B.x - A.x) * t;
+        endY = A.y + (B.y - A.y) * t;
+        labelColor = col;
+      } else if(isBurst && burstType === 'reject' && burstEdge && burstEdge.id === e.id){
+        const flash = Math.sin(bp * Math.PI);
+        col = `rgba(241,99,122,${0.55 + flash*0.45})`;
+        lw = lerp(1.4, 3.2, flash);
+        labelColor = '#F1637A';
+      } else if(isBurst && burstType === 'done' && step && step.mst.includes(e.id)){
+        const shimmer = Math.sin(bp * Math.PI);
+        ctx.save();
+        ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y);
+        ctx.strokeStyle = `rgba(47,223,168,${shimmer*0.5})`;
+        ctx.lineWidth = 3.4 + shimmer*5;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(A.x, A.y); ctx.lineTo(endX, endY);
+      ctx.strokeStyle = col;
+      ctx.lineWidth = lw;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+
+      // weight label
+      const mx = (A.x+B.x)/2, my=(A.y+B.y)/2;
+      ctx.font = "600 12px 'IBM Plex Mono', monospace";
+      const label = String(e.w);
+      const tw = ctx.measureText(label).width;
+      ctx.fillStyle = '#0A1220';
+      ctx.fillRect(mx - tw/2 - 5, my-10, tw+10, 18);
+      ctx.fillStyle = labelColor;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(label, mx, my-1);
+    });
+
+    // nodes
+    nodes.forEach((n,i)=>{
+      const p = px(n);
+      let fill = '#101A2C';
+      let stroke = '#33415C';
+      if(algo === 'kruskal' && step && step.roots){
+        stroke = groupPalette[step.roots[i] % groupPalette.length];
+        fill = stroke + '22';
+      } else if(algo === 'prim' && step && step.visited){
+        if(step.visited[i]){ stroke = '#2FDFA8'; fill = '#2FDFA822'; }
+      }
+
+      let radius = 24;
+      const isBurstNode = isBurst && burstType === 'accept' && burstNodes.includes(i);
+      if(isBurstNode){
+        radius = 24 + Math.sin(bp * Math.PI) * 5;
+        // expanding ring
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, lerp(24, 42, bp), 0, Math.PI*2);
+        ctx.strokeStyle = `rgba(47,223,168,${(1-bp)*0.8})`;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+      } else if(algo === 'prim' && isBurst && burstType === 'accept' && step && step.edge && i === step.edge.b){
+        // newly-joined city in Prim's — same expanding ring treatment
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, lerp(24, 42, bp), 0, Math.PI*2);
+        ctx.strokeStyle = `rgba(47,223,168,${(1-bp)*0.8})`;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        radius = 24 + Math.sin(bp * Math.PI) * 5;
+      }
+
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, radius, 0, Math.PI*2);
+      ctx.fillStyle = fill;
+      ctx.fill();
+      ctx.lineWidth = 2.4;
+      ctx.strokeStyle = stroke;
+      ctx.stroke();
+
+      ctx.font = "600 11.5px 'Inter', sans-serif";
+      ctx.fillStyle = '#E7ECF6';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(n.name, p.x, p.y + 38);
+    });
+  }
+
+  let prevNodeColors = nodes.map(()=>'#33415C');
+
+  function updateDsuPanel(){
+    dsuGroups.innerHTML = '';
+    const step = stepIndex >= 0 ? steps[stepIndex] : null;
+    const newColors = [];
+    nodes.forEach((n,i)=>{
+      const el = document.createElement('div');
+      let color = '#33415C';
+      if(algo === 'kruskal' && step && step.roots){
+        color = groupPalette[step.roots[i] % groupPalette.length];
+      } else if(algo === 'prim' && step && step.visited && step.visited[i]){
+        color = '#2FDFA8';
+      }
+      const changed = color !== prevNodeColors[i];
+      el.className = 'dsu-node' + (changed ? ' merged' : '');
+      el.style.background = color;
+      el.textContent = n.name;
+      dsuGroups.appendChild(el);
+      newColors.push(color);
+    });
+    prevNodeColors = newColors;
+  }
+
+  function logHtmlFor(step){
+    if(step.type === 'done'){
+      return { html:`<b>Done.</b> Minimum spanning tree cost = <b style="color:var(--teal)">${step.cost}</b>`, cls:'info' };
+    }
+    const A = nodes[step.edge.a].name, B = nodes[step.edge.b].name;
+    if(algo === 'kruskal'){
+      if(step.type === 'accept'){
+        return { html:`<span class="w">check</span> ${A}–${B} (${step.edge.w}) → different groups → <b>union()</b>, cable built`, cls:'accept' };
+      }
+      return { html:`<span class="w">check</span> ${A}–${B} (${step.edge.w}) → same group already → <b>rejected</b>, would loop`, cls:'reject' };
+    }
+    return { html:`<span class="w">frontier</span> ${A}–${B} (${step.edge.w}) is cheapest → added to region`, cls:'accept' };
+  }
+
+  function rebuildLog(){
+    logBox.innerHTML = '';
+    for(let i=0;i<=stepIndex;i++){
+      const { html, cls } = logHtmlFor(steps[i]);
+      const el = document.createElement('div');
+      el.className = 'log-entry ' + cls + (i === stepIndex ? ' new' : '');
+      el.innerHTML = html;
+      logBox.appendChild(el);
+    }
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  function pulseEl(el){
+    el.classList.remove('pulse');
+    void el.offsetWidth; // restart animation
+    el.classList.add('pulse');
+  }
+
+  function updateStats(){
+    const step = stepIndex >= 0 ? steps[stepIndex] : null;
+    const newCost = step ? step.cost : 0;
+    const newEdges = (step ? step.mst.length : 0) + ' / ' + (nodes.length-1);
+    if(statCost.textContent != newCost){ statCost.textContent = newCost; pulseEl(statCost); }
+    if(statEdges.textContent !== newEdges){ statEdges.textContent = newEdges; pulseEl(statEdges); }
+    if(algo === 'kruskal'){
+      statOpsLbl.textContent = 'Find() calls';
+      const v = step ? step.finds : 0;
+      if(statOps.textContent != v){ statOps.textContent = v; pulseEl(statOps); }
+    } else {
+      statOpsLbl.textContent = 'Edges scanned';
+      const v = step ? (stepIndex+1) : 0;
+      if(statOps.textContent != v){ statOps.textContent = v; pulseEl(statOps); }
+    }
+  }
+
+  function narrate(step){
+    if(!step){ narration.innerHTML = "<p>Press <b style='margin:0 4px;'>Next step</b> to check the first candidate cable — the cheapest one available.</p>"; }
+    else if(step.type === 'done'){
+      narration.innerHTML = `<p><b style="color:var(--teal);">Backbone complete.</b> All ${nodes.length} data centers connected for a total cost of <b style="color:var(--teal);">${step.cost}</b>, using exactly ${nodes.length-1} cables — the minimum possible.</p>`;
+    } else {
+      const A = nodes[step.edge.a].name, B = nodes[step.edge.b].name;
+      if(algo === 'kruskal'){
+        if(step.type === 'accept'){
+          narration.innerHTML = `<p>Checking <b>${A} ↔ ${B}</b> (cost ${step.edge.w}) — they're in <b>different</b> fiber groups. Merge and build the cable. ✅</p>`;
+        } else {
+          narration.innerHTML = `<p>Checking <b>${A} ↔ ${B}</b> (cost ${step.edge.w}) — they're <b>already</b> in the same fiber group. Building this would create a redundant loop. ❌ Skipped.</p>`;
+        }
+      } else {
+        narration.innerHTML = `<p>Cheapest cable leaving the connected region: <b>${A} ↔ ${B}</b> (cost ${step.edge.w}). Added — the region now includes one more city.</p>`;
+      }
+    }
+    narration.classList.remove('anim');
+    void narration.offsetWidth;
+    narration.classList.add('anim');
+  }
+
+
+  function paramRow(label, value, extraClass){
+    return `<tr><td>${label}</td><td class="val ${extraClass||''}">${value}</td></tr>`;
+  }
+
+  function renderParams(){
+    const step = stepIndex >= 0 ? steps[stepIndex] : null;
+
+    // data-structure banner — states, in plain terms, what's actually storing the state
+    if(algo === 'kruskal'){
+      dsBanner.innerHTML = `<b>Data structures in use</b><br>Edge list (array) sorted once up front · Disjoint Set Union — a <b>parent[]</b> array (who each node currently points to) and a <b>rank[]</b> array (tree-depth estimate, used to keep unions balanced).`;
+    } else {
+      dsBanner.innerHTML = `<b>Data structures in use</b><br>Adjacency edge list · a <b>visited[]</b> boolean array marking which cities are already in the tree. A real implementation also keeps a <b>min-heap</b> of frontier edges — this demo scans the frontier directly so every candidate stays visible.`;
+    }
+
+    // queue chips (kruskal only — sorted order is fixed up front)
+    if(algo === 'kruskal'){
+      queueWrap.style.display = '';
+      queueRow.innerHTML = '';
+      const edgeSteps = steps.slice(0, steps.length - 1); // exclude 'done'
+      edgeSteps.forEach((s,i)=>{
+        const chip = document.createElement('div');
+        let cls = 'queue-chip';
+        if(i < stepIndex) cls += s.type === 'accept' ? ' done-accept' : ' done-reject';
+        else if(i === stepIndex) cls += ' current';
+        chip.className = cls;
+        chip.textContent = `${nodes[s.edge.a].name.slice(0,3)}–${nodes[s.edge.b].name.slice(0,3)} (${s.edge.w})`;
+        queueRow.appendChild(chip);
+      });
+    } else {
+      queueWrap.style.display = 'none';
+    }
+
+    // parameter table
+    let rows = '';
+    if(!step){
+      rows = paramRow('Status', 'Not started — press Next step');
+      rows += paramRow('Space allocated so far', algo === 'kruskal' ? 'O(V) — parent[] and rank[] initialized' : 'O(V) — visited[] initialized');
+    } else if(step.type === 'done'){
+      rows += paramRow('Total cost', step.cost);
+      rows += paramRow('Cables built', step.mst.length + ' / ' + (nodes.length-1));
+      if(algo === 'kruskal'){
+        rows += paramRow('find() calls, total', step.finds);
+        rows += paramRow('union() calls, total', step.unions);
+        rows += paramRow('Total time complexity', 'O(E log E) — the sort dominates');
+        rows += paramRow('Total space complexity', 'O(V + E)');
+      } else {
+        rows += paramRow('Total time complexity', 'O(E log V) with a min-heap');
+        rows += paramRow('Total space complexity', 'O(V + E)');
+      }
+      rows += paramRow('Result', 'Minimum Spanning Tree complete', 'no');
+    } else {
+      const A = nodes[step.edge.a].name, B = nodes[step.edge.b].name;
+      if(algo === 'kruskal'){
+        rows += paramRow('Candidate edge', `${A} – ${B}`);
+        rows += paramRow('Weight (cost)', step.edge.w);
+        rows += paramRow(`find(${A})`, `root → ${nodes[step.rootA].name}`);
+        rows += paramRow(`find(${B})`, `root → ${nodes[step.rootB].name}`);
+        rows += paramRow('Roots equal?', step.rootA === step.rootB ? 'Yes → would cycle' : 'No', step.rootA === step.rootB ? 'yes' : 'no');
+        rows += paramRow('Decision', step.type === 'accept' ? 'union() called, edge accepted' : 'Edge rejected, loop avoided', step.type === 'accept' ? 'no' : 'yes');
+        rows += paramRow('find() calls so far', step.finds);
+        rows += paramRow('union() calls so far', step.unions);
+        rows += paramRow('This step\'s time cost', step.type === 'accept' ? '2× find() + 1× union() → O(α(n)) amortized' : '2× find() → O(α(n)) amortized');
+        rows += paramRow('This step\'s space cost', 'O(1) — no new memory allocated');
+      } else {
+        rows += paramRow('Round', step.round + ' of ' + (nodes.length-1));
+        rows += paramRow('Selected edge', `${A} – ${B}`);
+        rows += paramRow('Weight (cost)', step.edge.w);
+        rows += paramRow('Frontier edges scanned', step.scanned);
+        rows += paramRow('Region now includes', step.visited.map((v,i)=> v ? nodes[i].name : null).filter(Boolean).length + ' cities');
+        rows += paramRow('This step\'s time cost', `O(E) this demo's linear scan · O(log V) with a min-heap`);
+        rows += paramRow('This step\'s space cost', 'O(1) — visited[] flips one entry');
+      }
+    }
+    paramTable.innerHTML = rows;
+    paramTable.classList.remove('fade');
+    void paramTable.offsetWidth;
+    paramTable.classList.add('fade');
+
+    // parent pointer grid — kruskal only, since that's what Union-Find actually tracks
+    if(algo === 'kruskal'){
+      parentWrap.style.display = '';
+      parentGrid.innerHTML = '';
+      const snap = step ? step.parentSnap : nodes.map((_,i)=>i);
+      nodes.forEach((n,i)=>{
+        const chip = document.createElement('div');
+        const isRoot = snap[i] === i;
+        chip.className = 'parent-chip' + (isRoot ? ' root' : '');
+        chip.innerHTML = `<b>${n.name}</b> → ${nodes[snap[i]].name}`;
+        parentGrid.appendChild(chip);
+      });
+      parentGrid.classList.remove('fade');
+      void parentGrid.offsetWidth;
+      parentGrid.classList.add('fade');
+    } else {
+      parentWrap.style.display = 'none';
+    }
+  }
+
+  let codeBuiltForAlgo = null;
+  let codeLineEls = [];
+
+  function renderCode(){
+    const step = stepIndex >= 0 ? steps[stepIndex] : null;
+    const lines = CODE[algo];
+    const active = new Set(activeLines(step));
+
+    if(codeBuiltForAlgo !== algo){
+      // rebuild the DOM once per algorithm switch — then only classes toggle,
+      // which is what lets the highlight transition smoothly instead of jumping
+      codeBlock.innerHTML = lines.map((line,i)=>{
+        const text = line.t.replace(/</g,'&lt;');
+        const complexity = line.c ? `<span class="code-complexity">${line.c}</span>` : '';
+        return `<span class="code-line" data-i="${i}"><span class="code-text">${text}</span>${complexity}</span>`;
+      }).join('');
+      codeLineEls = Array.from(codeBlock.querySelectorAll('.code-line'));
+      codeBuiltForAlgo = algo;
+    }
+
+    codeLineEls.forEach((el,i)=>{
+      el.classList.toggle('active', active.has(i));
+    });
+  }
+
+
+  function render(){
+    drawGraph();
+    updateDsuPanel();
+    updateStats();
+    const step = stepIndex >= 0 ? steps[stepIndex] : null;
+    narrate(step);
+    rebuildLog();
+    renderParams();
+    renderCode();
+    btnStep.disabled = stepIndex >= steps.length - 1;
+    btnPrev.disabled = stepIndex <= -1;
+    stepSlider.max = steps.length;
+    stepSlider.value = stepIndex + 1;
+    stepCount.textContent = `Step ${stepIndex + 1} of ${steps.length}`;
+  }
+
+  function setStepIndex(i){
+    const newIndex = Math.max(-1, Math.min(steps.length - 1, i));
+    if(newIndex === stepIndex) return;
+    stepIndex = newIndex;
+    const step = stepIndex >= 0 ? steps[stepIndex] : null;
+    triggerBurst(step);
+    render();
+  }
+
+  function stepForward(){
+    if(stepIndex >= steps.length - 1){ stopPlay(); return; }
+    setStepIndex(stepIndex + 1);
+    if(stepIndex >= steps.length - 1) stopPlay();
+  }
+
+  function stepBack(){
+    if(stepIndex <= -1) return;
+    setStepIndex(stepIndex - 1);
+  }
+
+  function resetViz(){
+    stopPlay();
+    steps = algo === 'kruskal' ? computeKruskalSteps() : computePrimSteps();
+    prevNodeColors = nodes.map(()=>'#33415C');
+    burstType = null;
+    stepIndex = -2; // force setStepIndex(-1) below to register as a real change
+    setStepIndex(-1);
+  }
+
+  function stopPlay(){
+    playing = false;
+    if(playTimer){ clearInterval(playTimer); playTimer = null; }
+    btnPlay.textContent = '▶ Auto-play';
+  }
+
+  function togglePlay(){
+    if(playing){ stopPlay(); return; }
+    playing = true;
+    btnPlay.textContent = '⏸ Pause';
+    playTimer = setInterval(()=>{
+      if(stepIndex >= steps.length - 1){ stopPlay(); return; }
+      stepForward();
+    }, 950);
+  }
+
+  btnStep.addEventListener('click', stepForward);
+  btnPrev.addEventListener('click', ()=>{ stopPlay(); stepBack(); });
+  btnPlay.addEventListener('click', togglePlay);
+  btnReset.addEventListener('click', resetViz);
+  btnRandom.addEventListener('click', ()=>{ randomizeWeights(); resetViz(); });
+  stepSlider.addEventListener('input', (e)=>{ stopPlay(); setStepIndex(parseInt(e.target.value,10) - 1); });
+
+  tabBtns.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      tabBtns.forEach(b=>b.classList.remove('active'));
+      tabPanels.forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  algoKruskal.addEventListener('click', ()=>{
+    algo = 'kruskal';
+    algoKruskal.classList.add('active'); algoPrim.classList.remove('active');
+    resetViz();
+  });
+  algoPrim.addEventListener('click', ()=>{
+    algo = 'prim';
+    algoPrim.classList.add('active'); algoKruskal.classList.remove('active');
+    resetViz();
+  });
+
+  // responsive canvas backing size
+  function fitCanvas(){
+    const ratio = window.devicePixelRatio || 1;
+    const displayWidth = canvas.clientWidth;
+    if(!displayWidth) return;
+    logicalW = displayWidth;
+    logicalH = displayWidth * 0.66;
+    canvas.width = logicalW * ratio;
+    canvas.height = logicalH * ratio;
+    canvas.style.height = logicalH + 'px';
+    ctx.setTransform(ratio,0,0,ratio,0,0);
+    render();
+  }
+  window.addEventListener('resize', fitCanvas);
+
+  // init
+  setTimeout(fitCanvas, 50);
+  render();
+
+  // continuous animation loop — keeps the current burst (cable-laying, merge ring, etc.) playing every frame
+  (function tick(){
+    drawGraph();
+    requestAnimationFrame(tick);
+  })();
+
+  /* ============ HERO AMBIENT CANVAS ============ */
+  const heroCanvas = document.getElementById('heroCanvas');
+  const hctx = heroCanvas.getContext('2d');
+  let heroNodes = [];
+  function initHero(){
+    const w = heroCanvas.clientWidth, h = heroCanvas.clientHeight;
+    heroCanvas.width = w; heroCanvas.height = h;
+    heroNodes = [];
+    const count = w < 700 ? 9 : 16;
+    for(let i=0;i<count;i++){
+      heroNodes.push({
+        x: Math.random()*w, y: Math.random()*h,
+        vx:(Math.random()-0.5)*0.15, vy:(Math.random()-0.5)*0.15
+      });
+    }
+  }
+  function drawHero(){
+    const w = heroCanvas.width, h = heroCanvas.height;
+    hctx.clearRect(0,0,w,h);
+    heroNodes.forEach(n=>{
+      n.x += n.vx; n.y += n.vy;
+      if(n.x<0||n.x>w) n.vx*=-1;
+      if(n.y<0||n.y>h) n.vy*=-1;
+    });
+    for(let i=0;i<heroNodes.length;i++){
+      for(let j=i+1;j<heroNodes.length;j++){
+        const a=heroNodes[i], b=heroNodes[j];
+        const d = Math.hypot(a.x-b.x, a.y-b.y);
+        if(d < 220){
+          hctx.strokeStyle = `rgba(47,223,168,${0.12*(1-d/220)})`;
+          hctx.lineWidth=1;
+          hctx.beginPath(); hctx.moveTo(a.x,a.y); hctx.lineTo(b.x,b.y); hctx.stroke();
+        }
+      }
+    }
+    heroNodes.forEach(n=>{
+      hctx.beginPath(); hctx.arc(n.x,n.y,2.2,0,Math.PI*2);
+      hctx.fillStyle='rgba(108,147,240,0.5)'; hctx.fill();
+    });
+    requestAnimationFrame(drawHero);
+  }
+  setTimeout(()=>{ initHero(); drawHero(); }, 50);
+  window.addEventListener('resize', initHero);
+
+})();
+</script>
+</body>
+</html>
