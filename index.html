@@ -204,6 +204,7 @@
 
   .viz-side{ padding:20px; display:flex; flex-direction:column; gap:18px; min-width:0; }
   .stat-row{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  @media(max-width:400px){ .stat-row{ gap:6px; } .stat{ padding:10px 4px; } .stat .num{ font-size:16px; } .stat .lbl{ font-size:9px; } }
   .stat{
     background:var(--panel-2); border:1px solid var(--border-soft); border-radius:10px;
     padding:12px 10px; text-align:center;
@@ -326,7 +327,8 @@
   }
   .mini-arrow{ color:var(--text-dim); font-family:var(--mono); }
 
-  .compare-table{ width:100%; border-collapse:collapse; margin-top:24px; }
+  .table-scroll{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .compare-table{ width:100%; border-collapse:collapse; margin-top:24px; min-width:520px; }
   .compare-table th, .compare-table td{
     text-align:left; padding:14px 16px; border-bottom:1px solid var(--border-soft); font-size:14.5px;
   }
@@ -536,6 +538,7 @@
     <div class="grid-2">
       <div>
         <p style="font-family:var(--mono); font-size:12px; color:var(--teal); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:10px;">Kruskal's + Union-Find</p>
+        <div class="table-scroll">
         <table class="compare-table" style="margin-top:0;">
           <thead><tr><th>Stage</th><th>Data structure</th><th>Time</th><th>Space</th></tr></thead>
           <tbody>
@@ -547,9 +550,11 @@
             <tr><td><b style="color:var(--text);">Overall</b></td><td>—</td><td class="hl"><b>O(E log E)</b></td><td class="hl"><b>O(V + E)</b></td></tr>
           </tbody>
         </table>
+        </div>
       </div>
       <div>
         <p style="font-family:var(--mono); font-size:12px; color:var(--blue); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:10px;">Prim's (production version, with a heap)</p>
+        <div class="table-scroll">
         <table class="compare-table" style="margin-top:0;">
           <thead><tr><th>Stage</th><th>Data structure</th><th>Time</th><th>Space</th></tr></thead>
           <tbody>
@@ -560,6 +565,7 @@
             <tr><td><b style="color:var(--text);">Overall</b></td><td>—</td><td class="hl"><b>O(E log V)</b></td><td class="hl"><b>O(V + E)</b></td></tr>
           </tbody>
         </table>
+        </div>
       </div>
     </div>
     <p class="queue-note" style="margin-top:16px; max-width:none;">Note: the live demo above implements Prim's with a plain linear scan of frontier edges each round, purely so every candidate edge stays visible on screen — that costs O(V·E) instead of O(E log V). The table above reflects the real, heap-based version used in production systems.</p>
@@ -572,6 +578,7 @@
     <div class="eyebrow">05 — Kruskal's vs. Prim's</div>
     <h2>Two routes to the same backbone</h2>
     <p class="lede">Both algorithms are greedy — they never reconsider a decision — and both guarantee the true minimum-cost network. They just build it up differently.</p>
+    <div class="table-scroll">
     <table class="compare-table">
       <thead><tr><th>&nbsp;</th><th>Kruskal's</th><th>Prim's</th></tr></thead>
       <tbody>
@@ -581,6 +588,7 @@
         <tr><td>Best suited for</td><td>Sparse networks — relatively few possible routes</td><td>Dense networks — many possible routes between sites</td></tr>
       </tbody>
     </table>
+    </div>
   </div>
 </section>
 
@@ -797,17 +805,17 @@
   }
 
   function edgeColor(step, e){
-    if(!step) return '#33415C';
+    if(!step) return '#4A5D80';
     if(algo === 'kruskal'){
       if(step.mst.includes(e.id)) return '#2FDFA8';
       if(step.type !== 'done' && step.edge && step.edge.id === e.id){
         return step.type === 'accept' ? '#2FDFA8' : '#F1637A';
       }
-      return '#33415C';
+      return '#4A5D80';
     } else {
       if(step.mst.includes(e.id)) return '#2FDFA8';
       if(step.type !== 'done' && step.edge && step.edge.id === e.id) return '#2FDFA8';
-      return '#33415C';
+      return '#4A5D80';
     }
   }
 
@@ -842,13 +850,16 @@
     const isBurst = burstType && (now - burstStart) < BURST_MS[burstType];
     const bp = isBurst ? (now - burstStart) / BURST_MS[burstType] : 1;
 
+    // scale up base line widths on smaller canvases so edges stay legible on phones
+    const sizeScale = logicalW < 500 ? 1.5 : (logicalW < 640 ? 1.25 : 1);
+
     // edges
     edges.forEach(e=>{
       const A = px(nodes[e.a]), B = px(nodes[e.b]);
       let col = edgeColor(step, e);
-      let lw = (col === '#2FDFA8') ? 3.4 : ( (step && step.edge && step.edge.id===e.id) ? 2.6 : 1.4 );
+      let lw = ((col === '#2FDFA8') ? 3.4 : ( (step && step.edge && step.edge.id===e.id) ? 2.6 : 1.8 )) * sizeScale;
       let endX = B.x, endY = B.y;
-      let labelColor = (col === '#F1637A') ? '#F1637A' : (col === '#2FDFA8' ? '#2FDFA8' : '#8C99B4');
+      let labelColor = (col === '#F1637A') ? '#F1637A' : (col === '#2FDFA8' ? '#2FDFA8' : '#A6B2C8');
 
       if(isBurst && burstType === 'accept' && burstEdge && burstEdge.id === e.id){
         const t = easeOutCubic(bp);
@@ -881,11 +892,12 @@
 
       // weight label
       const mx = (A.x+B.x)/2, my=(A.y+B.y)/2;
-      ctx.font = "600 12px 'IBM Plex Mono', monospace";
+      const labelScale = Math.min(sizeScale, 1.15);
+      ctx.font = `600 ${Math.round(12*labelScale)}px 'IBM Plex Mono', monospace`;
       const label = String(e.w);
       const tw = ctx.measureText(label).width;
       ctx.fillStyle = '#0A1220';
-      ctx.fillRect(mx - tw/2 - 5, my-10, tw+10, 18);
+      ctx.fillRect(mx - tw/2 - 5, my-10*labelScale, tw+10, 18*labelScale);
       ctx.fillStyle = labelColor;
       ctx.textAlign='center'; ctx.textBaseline='middle';
       ctx.fillText(label, mx, my-1);
@@ -1251,7 +1263,10 @@
     const displayWidth = canvas.clientWidth;
     if(!displayWidth) return;
     logicalW = displayWidth;
-    logicalH = displayWidth * 0.74;
+    // narrow screens get a taller relative aspect (and a floor height) — otherwise the graph
+    // shrinks to an unreadably small strip once the side panel stacks below it
+    const aspect = displayWidth < 640 ? 0.98 : 0.74;
+    logicalH = Math.max(300, displayWidth * aspect);
     canvas.width = logicalW * ratio;
     canvas.height = logicalH * ratio;
     canvas.style.height = logicalH + 'px';
