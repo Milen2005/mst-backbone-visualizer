@@ -903,7 +903,13 @@
       ctx.fillText(label, mx, my-1);
     });
 
-    // nodes
+    // nodes — shrink slightly on narrow canvases, so circles stay proportionate and don't crowd each other
+    const nodeScale = logicalW < 500 ? 0.72 : (logicalW < 640 ? 0.85 : 1);
+    const baseRadius = 24 * nodeScale;
+    const ringMax = 42 * nodeScale;
+    const nameFont = Math.round(12.5 * Math.max(nodeScale, 0.82));
+    const labelOffset = 40 * nodeScale;
+
     nodes.forEach((n,i)=>{
       const p = px(n);
       let fill = '#101A2C';
@@ -915,24 +921,24 @@
         if(step.visited[i]){ stroke = '#2FDFA8'; fill = '#2FDFA822'; }
       }
 
-      let radius = 24;
+      let radius = baseRadius;
       const isBurstNode = isBurst && burstType === 'accept' && burstNodes.includes(i);
       if(isBurstNode){
-        radius = 24 + Math.sin(bp * Math.PI) * 5;
+        radius = baseRadius + Math.sin(bp * Math.PI) * 5 * nodeScale;
         // expanding ring
         ctx.beginPath();
-        ctx.arc(p.x, p.y, lerp(24, 42, bp), 0, Math.PI*2);
+        ctx.arc(p.x, p.y, lerp(baseRadius, ringMax, bp), 0, Math.PI*2);
         ctx.strokeStyle = `rgba(47,223,168,${(1-bp)*0.8})`;
         ctx.lineWidth = 2.5;
         ctx.stroke();
       } else if(algo === 'prim' && isBurst && burstType === 'accept' && step && step.edge && i === step.edge.b){
         // newly-joined city in Prim's — same expanding ring treatment
         ctx.beginPath();
-        ctx.arc(p.x, p.y, lerp(24, 42, bp), 0, Math.PI*2);
+        ctx.arc(p.x, p.y, lerp(baseRadius, ringMax, bp), 0, Math.PI*2);
         ctx.strokeStyle = `rgba(47,223,168,${(1-bp)*0.8})`;
         ctx.lineWidth = 2.5;
         ctx.stroke();
-        radius = 24 + Math.sin(bp * Math.PI) * 5;
+        radius = baseRadius + Math.sin(bp * Math.PI) * 5 * nodeScale;
       }
 
       ctx.beginPath();
@@ -943,10 +949,10 @@
       ctx.strokeStyle = stroke;
       ctx.stroke();
 
-      ctx.font = "600 12.5px 'Inter', sans-serif";
+      ctx.font = `600 ${nameFont}px 'Inter', sans-serif`;
       ctx.fillStyle = '#E7ECF6';
       ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText(n.name, p.x, p.y + 40);
+      ctx.fillText(n.name, p.x, p.y + radius + labelOffset - baseRadius);
     });
   }
 
